@@ -5,7 +5,6 @@ package Catalyst::Action::FromPSGI;
 use strict;
 use warnings;
 use base 'Catalyst::Action';
-use HTTP::Message::PSGI qw(res_from_psgi);
 use Plack::App::URLMap;
 use Plack::Request;
 
@@ -22,29 +21,14 @@ sub nest_app {
    return $nest->to_app
 }
 
-sub snort_psgi {
-   my ($self, $c, $r) = @_;
-
-   $c->res->status($r->code);
-   $c->res->body($r->content);
-   $c->res->headers($r->headers);
-}
-
 sub execute {
    my ($self, $controller, $c, @rest) = @_;
 
    my $app = $self->code->($controller, $c, @rest);
    my $nest = $self->nest_app($c, $app);
 
-   my $body = Plack::Request->new($c->req->env)->body;
-   $c->req->env->{'psgi.input'} = ref $body
-      ? do { $body->seek(0, 0); $body }
-      : do { open my $fh, '<', \$body; $fh }
-   ;
-   $c->req->env->{'psgix.input.buffered'} = 1;
-
-   my $res = res_from_psgi($nest->($c->req->env));
-   $self->snort_psgi($c, $res);
+   my $res = $nest->($c->req->env);
+   $c->res->from_psgi_response($res);
 
    return;
 }
